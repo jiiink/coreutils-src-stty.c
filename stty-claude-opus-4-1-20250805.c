@@ -503,72 +503,36 @@ static struct option const longopts[] =
 
 ATTRIBUTE_FORMAT ((printf, 1, 2))
 static void
-wrapf (char const *message, ...)
+wrapf (char const *message,...)
 {
   va_list args;
-  va_list args_copy;
   char *buf;
-  int needed;
-  size_t buflen;
+  int buflen;
 
   va_start (args, message);
-  va_copy (args_copy, args);
-  needed = vsnprintf (NULL, 0, message, args_copy);
-  va_end (args_copy);
-
-  if (needed < 0)
-    {
-      va_end (args);
-      xalloc_die ();
-    }
-
-  buflen = (size_t) needed;
-  buf = malloc (buflen + 1);
-  if (!buf)
-    {
-      va_end (args);
-      xalloc_die ();
-    }
-
-  needed = vsnprintf (buf, buflen + 1, message, args);
+  buflen = vasprintf (&buf, message, args);
   va_end (args);
 
-  if (needed < 0 || (size_t) needed != buflen)
-    {
-      free (buf);
-      xalloc_die ();
-    }
+  if (buflen < 0)
+    xalloc_die ();
 
-  if (0 < current_col)
+  if (current_col > 0)
     {
-      long long remain = (long long) max_col - (long long) current_col;
-      if (remain <= (long long) buflen)
+      if (current_col + buflen >= max_col)
         {
-          if (putchar ('\n') == EOF)
-            {
-              free (buf);
-              return;
-            }
+          putchar ('\n');
           current_col = 0;
         }
       else
         {
-          if (putchar (' ') == EOF)
-            {
-              free (buf);
-              return;
-            }
+          putchar (' ');
           current_col++;
         }
     }
 
-  if (fputs (buf, stdout) == EOF)
-    {
-      free (buf);
-      return;
-    }
+  fputs (buf, stdout);
+  current_col += buflen;
   free (buf);
-  current_col += (int) buflen;
 }
 
 void
@@ -580,161 +544,158 @@ usage (int status)
       exit (status);
     }
 
-  {
-    FILE *out = stdout;
-    const char *pn = program_name;
-
-    fprintf (out, _("\
+  printf (_("\
 Usage: %s [-F DEVICE | --file=DEVICE] [SETTING]...\n\
   or:  %s [-F DEVICE | --file=DEVICE] [-a|--all]\n\
   or:  %s [-F DEVICE | --file=DEVICE] [-g|--save]\n\
-"), pn, pn, pn);
-    fputs (_("\
+"),
+          program_name, program_name, program_name);
+  fputs (_("\
 Print or change terminal characteristics.\n\
-"), out);
+"), stdout);
 
-    emit_mandatory_arg_note ();
+  emit_mandatory_arg_note ();
 
-    fputs (_("\
+  fputs (_("\
   -a, --all          print all current settings in human-readable form\n\
   -g, --save         print all current settings in a stty-readable form\n\
   -F, --file=DEVICE  open and use DEVICE instead of standard input\n\
-"), out);
-    fputs (HELP_OPTION_DESCRIPTION, out);
-    fputs (VERSION_OPTION_DESCRIPTION, out);
-    fputs (_("\
+"), stdout);
+  fputs (HELP_OPTION_DESCRIPTION, stdout);
+  fputs (VERSION_OPTION_DESCRIPTION, stdout);
+  fputs (_("\
 \n\
 Optional - before SETTING indicates negation.  An * marks non-POSIX\n\
 settings.  The underlying system defines which settings are available.\n\
-"), out);
-    fputs (_("\
+"), stdout);
+  fputs (_("\
 \n\
-Special characters:\n"), out);
+Special characters:\n"), stdout);
 #ifdef VFLUSHO
-    fputs (_("\
+  fputs (_("\
  * discard CHAR  CHAR will toggle discarding of output\n\
-"), out);
+"), stdout);
 #endif
 #ifdef VDSUSP
-    fputs (_("\
+  fputs (_("\
  * dsusp CHAR    CHAR will send a terminal stop signal once input flushed\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    eof CHAR      CHAR will send an end of file (terminate the input)\n\
    eol CHAR      CHAR will end the line\n\
-"), out);
+"), stdout);
 #ifdef VEOL2
-    fputs (_("\
+  fputs (_("\
  * eol2 CHAR     alternate CHAR for ending the line\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    erase CHAR    CHAR will erase the last character typed\n\
    intr CHAR     CHAR will send an interrupt signal\n\
    kill CHAR     CHAR will erase the current line\n\
-"), out);
+"), stdout);
 #ifdef VLNEXT
-    fputs (_("\
+  fputs (_("\
  * lnext CHAR    CHAR will enter the next character quoted\n\
-"), out);
+"), stdout);
 #endif
 #ifdef VSTATUS
-    fputs (_("\
+  fputs (_("\
  * status CHAR   CHAR will send an info signal\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    quit CHAR     CHAR will send a quit signal\n\
-"), out);
+"), stdout);
 #if defined CREPRINT || defined VREPRINT
-    fputs (_("\
+  fputs (_("\
  * rprnt CHAR    CHAR will redraw the current line\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    start CHAR    CHAR will restart the output after stopping it\n\
    stop CHAR     CHAR will stop the output\n\
    susp CHAR     CHAR will send a terminal stop signal\n\
-"), out);
+"), stdout);
 #ifdef VSWTCH
-    fputs (_("\
+  fputs (_("\
  * swtch CHAR    CHAR will switch to a different shell layer\n\
-"), out);
+"), stdout);
 #endif
 #ifdef VWERASE
-    fputs (_("\
+  fputs (_("\
  * werase CHAR   CHAR will erase the last word typed\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
 \n\
 Special settings:\n\
    N             set the input and output speeds to N bauds\n\
-"), out);
+"), stdout);
 #ifdef TIOCGWINSZ
-    fputs (_("\
+  fputs (_("\
    cols N        tell the kernel that the terminal has N columns\n\
  * columns N     same as cols N\n\
-"), out);
+"), stdout);
 #endif
-    fprintf (out, _("\
+  printf (_("\
  * [-]drain      wait for transmission before applying settings (%s by default)\
 \n"), tcsetattr_options == TCSADRAIN ? _("on") : _("off"));
-    fputs (_("\
+  fputs (_("\
    ispeed N      set the input speed to N\n\
-"), out);
+"), stdout);
 #ifdef HAVE_C_LINE
-    fputs (_("\
+  fputs (_("\
  * line N        use line discipline N\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    min N         with -icanon, set N characters minimum for a completed read\n\
    ospeed N      set the output speed to N\n\
-"), out);
+"), stdout);
 #ifdef TIOCGWINSZ
-    fputs (_("\
+  fputs (_("\
    rows N        tell the kernel that the terminal has N rows\n\
    size          print the number of rows and columns according to the kernel\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    speed         print the terminal speed\n\
    time N        with -icanon, set read timeout of N tenths of a second\n\
-"), out);
-    fputs (_("\
+"), stdout);
+  fputs (_("\
 \n\
 Control settings:\n\
    [-]clocal     disable modem control signals\n\
    [-]cread      allow input to be received\n\
-"), out);
+"), stdout);
 #ifdef CRTSCTS
-    fputs (_("\
+  fputs (_("\
  * [-]crtscts    enable RTS/CTS handshaking\n\
-"), out);
+"), stdout);
 #endif
 #ifdef CDTRDSR
-    fputs (_("\
+  fputs (_("\
  * [-]cdtrdsr    enable DTR/DSR handshaking\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    csN           set character size to N bits, N in [5..8]\n\
-"), out);
-    fputs (_("\
+"), stdout);
+  fputs (_("\
    [-]cstopb     use two stop bits per character (one with '-')\n\
    [-]hup        send a hangup signal when the last process closes the tty\n\
    [-]hupcl      same as [-]hup\n\
    [-]parenb     generate parity bit in output and expect parity bit in input\n\
    [-]parodd     set odd parity (or even parity with '-')\n\
-"), out);
+"), stdout);
 #ifdef CMSPAR
-    fputs (_("\
+  fputs (_("\
  * [-]cmspar     use \"stick\" (mark/space) parity\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
 \n\
 Input settings:\n\
    [-]brkint     breaks cause an interrupt signal\n\
@@ -742,299 +703,299 @@ Input settings:\n\
    [-]ignbrk     ignore break characters\n\
    [-]igncr      ignore carriage return\n\
    [-]ignpar     ignore characters with parity errors\n\
-"), out);
+"), stdout);
 #ifdef IMAXBEL
-    fputs (_("\
+  fputs (_("\
  * [-]imaxbel    beep and do not flush a full input buffer on a character\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    [-]inlcr      translate newline to carriage return\n\
    [-]inpck      enable input parity checking\n\
    [-]istrip     clear high (8th) bit of input characters\n\
-"), out);
+"), stdout);
 #ifdef IUTF8
-    fputs (_("\
+  fputs (_("\
  * [-]iutf8      assume input characters are UTF-8 encoded\n\
-"), out);
+"), stdout);
 #endif
 #ifdef IUCLC
-    fputs (_("\
+  fputs (_("\
  * [-]iuclc      translate uppercase characters to lowercase\n\
-"), out);
+"), stdout);
 #endif
 #ifdef IXANY
-    fputs (_("\
+  fputs (_("\
  * [-]ixany      let any character restart output, not only start character\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    [-]ixoff      enable sending of start/stop characters\n\
    [-]ixon       enable XON/XOFF flow control\n\
    [-]parmrk     mark parity errors (with a 255-0-character sequence)\n\
    [-]tandem     same as [-]ixoff\n\
-"), out);
-    fputs (_("\
+"), stdout);
+  fputs (_("\
 \n\
 Output settings:\n\
-"), out);
+"), stdout);
 #ifdef BSDLY
-    fputs (_("\
+  fputs (_("\
  * bsN           backspace delay style, N in [0..1]\n\
-"), out);
+"), stdout);
 #endif
 #ifdef CRDLY
-    fputs (_("\
+  fputs (_("\
  * crN           carriage return delay style, N in [0..3]\n\
-"), out);
+"), stdout);
 #endif
 #ifdef FFDLY
-    fputs (_("\
+  fputs (_("\
  * ffN           form feed delay style, N in [0..1]\n\
-"), out);
+"), stdout);
 #endif
 #ifdef NLDLY
-    fputs (_("\
+  fputs (_("\
  * nlN           newline delay style, N in [0..1]\n\
-"), out);
+"), stdout);
 #endif
 #ifdef OCRNL
-    fputs (_("\
+  fputs (_("\
  * [-]ocrnl      translate carriage return to newline\n\
-"), out);
+"), stdout);
 #endif
 #ifdef OFDEL
-    fputs (_("\
+  fputs (_("\
  * [-]ofdel      use delete characters for fill instead of NUL characters\n\
-"), out);
+"), stdout);
 #endif
 #ifdef OFILL
-    fputs (_("\
+  fputs (_("\
  * [-]ofill      use fill (padding) characters instead of timing for delays\n\
-"), out);
+"), stdout);
 #endif
 #ifdef OLCUC
-    fputs (_("\
+  fputs (_("\
  * [-]olcuc      translate lowercase characters to uppercase\n\
-"), out);
+"), stdout);
 #endif
 #ifdef ONLCR
-    fputs (_("\
+  fputs (_("\
  * [-]onlcr      translate newline to carriage return-newline\n\
-"), out);
+"), stdout);
 #endif
 #ifdef ONLRET
-    fputs (_("\
+  fputs (_("\
  * [-]onlret     newline performs a carriage return\n\
-"), out);
+"), stdout);
 #endif
 #ifdef ONOCR
-    fputs (_("\
+  fputs (_("\
  * [-]onocr      do not print carriage returns in the first column\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    [-]opost      postprocess output\n\
-"), out);
+"), stdout);
 #if defined TABDLY || defined OXTABS
-    fputs (_("\
+  fputs (_("\
  * tabN          horizontal tab delay style, N in [0..3]\n\
  * tabs          same as tab0\n\
  * -tabs         same as tab3\n\
-"), out);
+"), stdout);
 #endif
 #ifdef VTDLY
-    fputs (_("\
+  fputs (_("\
  * vtN           vertical tab delay style, N in [0..1]\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
 \n\
 Local settings:\n\
    [-]crterase   echo erase characters as backspace-space-backspace\n\
-"), out);
+"), stdout);
 #ifdef ECHOKE
-    fputs (_("\
+  fputs (_("\
  * crtkill       kill all line by obeying the echoprt and echoe settings\n\
  * -crtkill      kill all line by obeying the echoctl and echok settings\n\
-"), out);
+"), stdout);
 #endif
 #ifdef ECHOCTL
-    fputs (_("\
+  fputs (_("\
  * [-]ctlecho    echo control characters in hat notation ('^c')\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    [-]echo       echo input characters\n\
-"), out);
+"), stdout);
 #ifdef ECHOCTL
-    fputs (_("\
+  fputs (_("\
  * [-]echoctl    same as [-]ctlecho\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    [-]echoe      same as [-]crterase\n\
    [-]echok      echo a newline after a kill character\n\
-"), out);
+"), stdout);
 #ifdef ECHOKE
-    fputs (_("\
+  fputs (_("\
  * [-]echoke     same as [-]crtkill\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    [-]echonl     echo newline even if not echoing other characters\n\
-"), out);
+"), stdout);
 #ifdef ECHOPRT
-    fputs (_("\
+  fputs (_("\
  * [-]echoprt    echo erased characters backward, between '\\' and '/'\n\
-"), out);
+"), stdout);
 #endif
 #if defined EXTPROC || defined TIOCEXT
-    fputs (_("\
+  fputs (_("\
  * [-]extproc    enable \"LINEMODE\"; useful with high latency links\n\
-"), out);
+"), stdout);
 #endif
 #if defined FLUSHO
-    fputs (_("\
+  fputs (_("\
  * [-]flusho     discard output\n\
-"), out);
+"), stdout);
 #endif
-    fprintf (out, _("\
+  printf (_("\
    [-]icanon     enable special characters: %s\n\
    [-]iexten     enable non-POSIX special characters\n\
 "), "erase, kill"
 #ifdef VWERASE
-    ", werase"
+  ", werase"
 #endif
 #if defined CREPRINT || defined VREPRINT
-    ", rprnt"
+  ", rprnt"
 #endif
 );
-    fputs (_("\
+  fputs (_("\
    [-]isig       enable interrupt, quit, and suspend special characters\n\
    [-]noflsh     disable flushing after interrupt and quit special characters\n\
-"), out);
+"), stdout);
 #ifdef ECHOPRT
-    fputs (_("\
+  fputs (_("\
  * [-]prterase   same as [-]echoprt\n\
-"), out);
+"), stdout);
 #endif
 #ifdef TOSTOP
-    fputs (_("\
+  fputs (_("\
  * [-]tostop     stop background jobs that try to write to the terminal\n\
-"), out);
+"), stdout);
 #endif
 #ifdef XCASE
-    fputs (_("\
+  fputs (_("\
  * [-]xcase      with icanon, escape with '\\' for uppercase characters\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
 \n\
 Combination settings:\n\
-"), out);
+"), stdout);
 #if defined XCASE && defined IUCLC && defined OLCUC
-    fputs (_("\
+  fputs (_("\
  * [-]LCASE      same as [-]lcase\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    cbreak        same as -icanon\n\
    -cbreak       same as icanon\n\
-"), out);
-    fputs (_("\
+"), stdout);
+  fputs (_("\
    cooked        same as brkint ignpar istrip icrnl ixon opost isig\n\
                  icanon, eof and eol characters to their default values\n\
    -cooked       same as raw\n\
-"), out);
-    fprintf (out, _("\
+"), stdout);
+  printf (_("\
    crt           same as %s\n\
 "), "echoe"
 #ifdef ECHOCTL
-    " echoctl"
+  " echoctl"
 #endif
 #ifdef ECHOKE
-    " echoke"
+  " echoke"
 #endif
 );
-    fprintf (out, _("\
+  printf (_("\
    dec           same as %s intr ^c erase 0177\n\
                  kill ^u\n\
 "), "echoe"
 #ifdef ECHOCTL
-    " echoctl"
+  " echoctl"
 #endif
 #ifdef ECHOKE
-    " echoke"
+  " echoke"
 #endif
 #ifdef IXANY
-    " -ixany"
+  " -ixany"
 #endif
 );
 #ifdef IXANY
-    fputs (_("\
+  fputs (_("\
  * [-]decctlq    same as [-]ixany\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    ek            erase and kill characters to their default values\n\
    evenp         same as parenb -parodd cs7\n\
    -evenp        same as -parenb cs8\n\
-"), out);
+"), stdout);
 #if defined XCASE && defined IUCLC && defined OLCUC
-    fputs (_("\
+  fputs (_("\
  * [-]lcase      same as xcase iuclc olcuc\n\
-"), out);
+"), stdout);
 #endif
-    fputs (_("\
+  fputs (_("\
    litout        same as -parenb -istrip -opost cs8\n\
    -litout       same as parenb istrip opost cs7\n\
-"), out);
-    fprintf (out, _("\
+"), stdout);
+  printf (_("\
    nl            same as %s\n\
    -nl           same as %s\n\
 "), "-icrnl"
 #ifdef ONLCR
-   " -onlcr"
+ " -onlcr"
 #endif
-  , "icrnl -inlcr -igncr"
+, "icrnl -inlcr -igncr"
 #ifdef ONLCR
-   " onlcr"
+ " onlcr"
 #endif
 #ifdef OCRNL
-   " -ocrnl"
+ " -ocrnl"
 #endif
 #ifdef ONLRET
-   " -onlret"
+ " -onlret"
 #endif
 );
-    fputs (_("\
+  fputs (_("\
    oddp          same as parenb parodd cs7\n\
    -oddp         same as -parenb cs8\n\
    [-]parity     same as [-]evenp\n\
    pass8         same as -parenb -istrip cs8\n\
    -pass8        same as parenb istrip cs7\n\
-"), out);
-    fprintf (out, _("\
+"), stdout);
+  printf (_("\
    raw           same as -ignbrk -brkint -ignpar -parmrk -inpck -istrip\n\
                  -inlcr -igncr -icrnl -ixon -ixoff -icanon -opost\n\
                  -isig%s min 1 time 0\n\
    -raw          same as cooked\n\
 "),
 #ifdef IUCLC
-   " -iuclc"
+ " -iuclc"
 #endif
 #ifdef IXANY
-   " -ixany"
+ " -ixany"
 #endif
 #ifdef IMAXBEL
-   " -imaxbel"
+ " -imaxbel"
 #endif
 #ifdef XCASE
-   " -xcase"
+ " -xcase"
 #endif
-);
-    fprintf (out, _("\
+  "");
+  printf (_("\
    sane          same as cread -ignbrk brkint -inlcr -igncr icrnl\n\
                  icanon iexten echo echoe echok -echonl -noflsh\n\
                  %s\n\
@@ -1042,94 +1003,92 @@ Combination settings:\n\
                  %s,\n\
                  all special characters to their default values\n\
 "),
-   "-ixoff"
+ "-ixoff"
 #ifdef IUTF8
-   " -iutf8"
+ " -iutf8"
 #endif
 #ifdef IUCLC
-   " -iuclc"
+ " -iuclc"
 #endif
 #ifdef IXANY
-   " -ixany"
+ " -ixany"
 #endif
 #ifdef IMAXBEL
-   " imaxbel"
+ " imaxbel"
 #endif
 #ifdef XCASE
-   " -xcase"
+ " -xcase"
 #endif
 #ifdef OLCUC
-   " -olcuc"
+ " -olcuc"
 #endif
 #ifdef OCRNL
-   " -ocrnl"
+ " -ocrnl"
 #endif
-
- , "opost"
+  "",
+"opost"
 #ifdef OFILL
-   " -ofill"
+ " -ofill"
 #endif
 #ifdef ONLCR
-   " onlcr"
+ " onlcr"
 #endif
 #ifdef ONOCR
-   " -onocr"
+ " -onocr"
 #endif
 #ifdef ONLRET
-   " -onlret"
+ " -onlret"
 #endif
 #ifdef NLDLY
-   " nl0"
+ " nl0"
 #endif
 #ifdef CRDLY
-   " cr0"
+ " cr0"
 #endif
 #ifdef TAB0
-   " tab0"
+ " tab0"
 #endif
 #ifdef BSDLY
-   " bs0"
+ " bs0"
 #endif
 #ifdef VTDLY
-   " vt0"
+ " vt0"
 #endif
 #ifdef FFDLY
-   " ff0"
+ " ff0"
 #endif
-
- , "isig"
+  "",
+"isig"
 #ifdef TOSTOP
-   " -tostop"
+ " -tostop"
 #endif
 #ifdef OFDEL
-   " -ofdel"
+ " -ofdel"
 #endif
 #ifdef ECHOPRT
-   " -echoprt"
+ " -echoprt"
 #endif
 #ifdef ECHOCTL
-   " echoctl"
+ " echoctl"
 #endif
 #ifdef ECHOKE
-   " echoke"
+ " echoke"
 #endif
 #ifdef EXTPROC
-   " -extproc"
+ " -extproc"
 #endif
 #ifdef FLUSHO
-   " -flusho"
+ " -flusho"
 #endif
-);
-    fputs (_("\
+  "");
+  fputs (_("\
 \n\
 Handle the tty line connected to standard input.  Without arguments,\n\
 prints baud rate, line discipline, and deviations from stty sane.  In\n\
 settings, CHAR is taken literally, or coded as in ^c, 0x37, 0177 or\n\
 127; special values ^- or undef used to disable special characters.\n\
-"), out);
-    emit_ancillary_info (PROGRAM_NAME);
-  }
-
+"), stdout);
+  emit_ancillary_info (PROGRAM_NAME);
   exit (status);
 }
 
@@ -1137,54 +1096,6 @@ settings, CHAR is taken literally, or coded as in ^c, 0x37, 0177 or\n\
 /* Apply specified settings to MODE and REQUIRE_SET_ATTR as required.
    If CHECKING is true, this function doesn't interact
    with a device, and only validates specified settings.  */
-
-static inline void ensure_next_argument(int k, int n_settings, char * const *settings, char const *arg)
-{
-  if (k == n_settings - 1 || !settings[k + 1])
-    {
-      error (0, 0, _("missing argument to %s"), quote (arg));
-      usage (EXIT_FAILURE);
-    }
-}
-
-static inline int find_mode_index (char const *arg)
-{
-  for (int i = 0; mode_info[i].name != nullptr; ++i)
-    {
-      if (STREQ (arg, mode_info[i].name))
-        return i;
-    }
-  return -1;
-}
-
-static inline int find_control_index (char const *arg)
-{
-  for (int i = 0; control_info[i].name != nullptr; ++i)
-    {
-      if (STREQ (arg, control_info[i].name))
-        return i;
-    }
-  return -1;
-}
-
-static inline bool handle_baud_option (bool checking, int *k, int n_settings,
-                                       char * const *settings, char const *opt_name,
-                                       char const *invalid_fmt, int which_speed,
-                                       struct termios *mode, bool *require_set_attr)
-{
-  ensure_next_argument (*k, n_settings, settings, opt_name);
-  ++(*k);
-  if (string_to_baud (settings[*k]) == (speed_t) -1)
-    {
-      error (0, 0, invalid_fmt, quote (settings[*k]));
-      usage (EXIT_FAILURE);
-    }
-  set_speed (which_speed, settings[*k], mode);
-  if (checking)
-    return true;
-  *require_set_attr = true;
-  return false;
-}
 
 static void
 apply_settings (bool checking, char const *device_name,
@@ -1194,8 +1105,6 @@ apply_settings (bool checking, char const *device_name,
   for (int k = 1; k < n_settings; k++)
     {
       char const *arg = settings[k];
-      bool match_found = false;
-      bool not_set_attr = false;
       bool reversed = false;
 
       if (! arg)
@@ -1213,132 +1122,38 @@ apply_settings (bool checking, char const *device_name,
           continue;
         }
 
-      int mi = find_mode_index (arg);
-      if (mi >= 0)
-        {
-          if ((mode_info[mi].flags & NO_SETATTR) == 0)
-            {
-              match_found = set_mode (&mode_info[mi], reversed, mode);
-              *require_set_attr = true;
-            }
-          else
-            {
-              match_found = true;
-              not_set_attr = true;
-            }
-        }
+      if (process_mode_info(arg, reversed, mode, require_set_attr))
+        continue;
 
-      if (!match_found && reversed)
+      if (reversed)
         {
           error (0, 0, _("invalid argument %s"), quote (arg - 1));
           usage (EXIT_FAILURE);
         }
 
-      if (!match_found)
+      if (process_control_info(arg, &k, n_settings, settings, mode, require_set_attr))
+        continue;
+
+      if (process_speed_settings(arg, &k, n_settings, settings, checking, mode, require_set_attr))
+        continue;
+
+      if (process_special_settings(arg, &k, n_settings, settings, checking, device_name, mode, require_set_attr))
+        continue;
+
+      if (string_to_baud (arg) != (speed_t) -1)
         {
-          int ci = find_control_index (arg);
-          if (ci >= 0)
-            {
-              ensure_next_argument (k, n_settings, settings, arg);
-              ++k;
-              set_control_char (&control_info[ci], settings[k], mode);
-              *require_set_attr = true;
-              match_found = true;
-            }
+          set_speed (both_speeds, arg, mode);
+          if (!checking)
+            *require_set_attr = true;
         }
-
-      if (!match_found || not_set_attr)
+      else if (! recover_mode (arg, mode))
         {
-          if (STREQ (arg, "ispeed"))
-            {
-              if (handle_baud_option (checking, &k, n_settings, settings, arg,
-                                      _("invalid ispeed %s"), input_speed,
-                                      mode, require_set_attr))
-                continue;
-            }
-          else if (STREQ (arg, "ospeed"))
-            {
-              if (handle_baud_option (checking, &k, n_settings, settings, arg,
-                                      _("invalid ospeed %s"), output_speed,
-                                      mode, require_set_attr))
-                continue;
-            }
-#ifdef TIOCEXT
-          else if (STREQ (arg, "extproc"))
-            {
-              int val = ! reversed;
-
-              if (checking)
-                continue;
-
-              if (ioctl (STDIN_FILENO, TIOCEXT, &val) != 0)
-                error (EXIT_FAILURE, errno, _("%s: error setting %s"),
-                       quotef_n (0, device_name), quote_n (1, arg));
-            }
-#endif
-#ifdef TIOCGWINSZ
-          else if (STREQ (arg, "rows"))
-            {
-              ensure_next_argument (k, n_settings, settings, arg);
-              ++k;
-              if (checking)
-                continue;
-              set_window_size (integer_arg (settings[k], INT_MAX), -1,
-                               device_name);
-            }
-          else if (STREQ (arg, "cols") || STREQ (arg, "columns"))
-            {
-              ensure_next_argument (k, n_settings, settings, arg);
-              ++k;
-              if (checking)
-                continue;
-              set_window_size (-1, integer_arg (settings[k], INT_MAX),
-                               device_name);
-            }
-          else if (STREQ (arg, "size"))
-            {
-              if (checking)
-                continue;
-              max_col = screen_columns ();
-              current_col = 0;
-              display_window_size (false, device_name);
-            }
-#endif
-#ifdef HAVE_C_LINE
-          else if (STREQ (arg, "line"))
-            {
-              ensure_next_argument (k, n_settings, settings, arg);
-              ++k;
-              uintmax_t value = integer_arg (settings[k], UINTMAX_MAX);
-              if (ckd_add (&mode->c_line, value, 0))
-                error (0, EOVERFLOW, _("invalid line discipline %s"),
-                       quote (settings[k]));
-              *require_set_attr = true;
-            }
-#endif
-          else if (STREQ (arg, "speed"))
-            {
-              if (checking)
-                continue;
-              max_col = screen_columns ();
-              display_speed (mode, false);
-            }
-          else if (string_to_baud (arg) != (speed_t) -1)
-            {
-              set_speed (both_speeds, arg, mode);
-              if (checking)
-                continue;
-              *require_set_attr = true;
-            }
-          else
-            {
-              if (! recover_mode (arg, mode))
-                {
-                  error (0, 0, _("invalid argument %s"), quote (arg));
-                  usage (EXIT_FAILURE);
-                }
-              *require_set_attr = true;
-            }
+          error (0, 0, _("invalid argument %s"), quote (arg));
+          usage (EXIT_FAILURE);
+        }
+      else
+        {
+          *require_set_attr = true;
         }
     }
 
@@ -1346,16 +1161,173 @@ apply_settings (bool checking, char const *device_name,
     check_speed (mode);
 }
 
+static bool
+process_mode_info(char const *arg, bool reversed, struct termios *mode, bool *require_set_attr)
+{
+  for (int i = 0; mode_info[i].name != nullptr; ++i)
+    {
+      if (STREQ (arg, mode_info[i].name))
+        {
+          if ((mode_info[i].flags & NO_SETATTR) == 0)
+            {
+              set_mode (&mode_info[i], reversed, mode);
+              *require_set_attr = true;
+            }
+          return true;
+        }
+    }
+  return false;
+}
+
+static bool
+process_control_info(char const *arg, int *k, int n_settings, char * const *settings,
+                     struct termios *mode, bool *require_set_attr)
+{
+  for (int i = 0; control_info[i].name != nullptr; ++i)
+    {
+      if (STREQ (arg, control_info[i].name))
+        {
+          if (*k == n_settings - 1 || ! settings[*k + 1])
+            {
+              error (0, 0, _("missing argument to %s"), quote (arg));
+              usage (EXIT_FAILURE);
+            }
+          ++(*k);
+          set_control_char (&control_info[i], settings[*k], mode);
+          *require_set_attr = true;
+          return true;
+        }
+    }
+  return false;
+}
+
+static bool
+process_speed_settings(char const *arg, int *k, int n_settings, char * const *settings,
+                       bool checking, struct termios *mode, bool *require_set_attr)
+{
+  if (STREQ (arg, "ispeed"))
+    {
+      validate_and_increment_arg(arg, k, n_settings, settings);
+      if (string_to_baud (settings[*k]) == (speed_t) -1)
+        {
+          error (0, 0, _("invalid ispeed %s"), quote (settings[*k]));
+          usage (EXIT_FAILURE);
+        }
+      set_speed (input_speed, settings[*k], mode);
+      if (!checking)
+        *require_set_attr = true;
+      return true;
+    }
+  
+  if (STREQ (arg, "ospeed"))
+    {
+      validate_and_increment_arg(arg, k, n_settings, settings);
+      if (string_to_baud (settings[*k]) == (speed_t) -1)
+        {
+          error (0, 0, _("invalid ospeed %s"), quote (settings[*k]));
+          usage (EXIT_FAILURE);
+        }
+      set_speed (output_speed, settings[*k], mode);
+      if (!checking)
+        *require_set_attr = true;
+      return true;
+    }
+
+  if (STREQ (arg, "speed"))
+    {
+      if (!checking)
+        {
+          max_col = screen_columns ();
+          display_speed (mode, false);
+        }
+      return true;
+    }
+
+  return false;
+}
+
+static bool
+process_special_settings(char const *arg, int *k, int n_settings, char * const *settings,
+                         bool checking, char const *device_name, struct termios *mode, bool *require_set_attr)
+{
+#ifdef TIOCEXT
+  if (STREQ (arg, "extproc"))
+    {
+      if (!checking)
+        {
+          int val = 1;
+          if (ioctl (STDIN_FILENO, TIOCEXT, &val) != 0)
+            error (EXIT_FAILURE, errno, _("%s: error setting %s"),
+                   quotef_n (0, device_name), quote_n (1, arg));
+        }
+      return true;
+    }
+#endif
+
+#ifdef TIOCGWINSZ
+  if (STREQ (arg, "rows"))
+    {
+      validate_and_increment_arg(arg, k, n_settings, settings);
+      if (!checking)
+        set_window_size (integer_arg (settings[*k], INT_MAX), -1, device_name);
+      return true;
+    }
+
+  if (STREQ (arg, "cols") || STREQ (arg, "columns"))
+    {
+      validate_and_increment_arg(arg, k, n_settings, settings);
+      if (!checking)
+        set_window_size (-1, integer_arg (settings[*k], INT_MAX), device_name);
+      return true;
+    }
+
+  if (STREQ (arg, "size"))
+    {
+      if (!checking)
+        {
+          max_col = screen_columns ();
+          current_col = 0;
+          display_window_size (false, device_name);
+        }
+      return true;
+    }
+#endif
+
+#ifdef HAVE_C_LINE
+  if (STREQ (arg, "line"))
+    {
+      validate_and_increment_arg(arg, k, n_settings, settings);
+      uintmax_t value = integer_arg (settings[*k], UINTMAX_MAX);
+      if (ckd_add (&mode->c_line, value, 0))
+        error (0, EOVERFLOW, _("invalid line discipline %s"), quote (settings[*k]));
+      *require_set_attr = true;
+      return true;
+    }
+#endif
+
+  return false;
+}
+
+static void
+validate_and_increment_arg(char const *arg, int *k, int n_settings, char * const *settings)
+{
+  if (*k == n_settings - 1 || ! settings[*k + 1])
+    {
+      error (0, 0, _("missing argument to %s"), quote (arg));
+      usage (EXIT_FAILURE);
+    }
+  ++(*k);
+}
+
 int
 main (int argc, char **argv)
 {
   static struct termios mode;
-
   enum output_type output_type = changed;
   int optc;
   int argi = 0;
   int opti = 1;
-  bool require_set_attr = false;
+  bool require_set_attr;
   bool verbose_output = false;
   bool recoverable_output = false;
   bool noargs = true;
@@ -1372,7 +1344,9 @@ main (int argc, char **argv)
 
   opterr = 0;
 
-  while ((optc = getopt_long (argc - argi, argv + argi, "-agF:", longopts, NULL)) != -1)
+  while ((optc = getopt_long (argc - argi, argv + argi, "-agF:",
+                              longopts, NULL))
+         != -1)
     {
       switch (optc)
         {
@@ -1429,17 +1403,20 @@ main (int argc, char **argv)
   if (!noargs && !verbose_output && !recoverable_output)
     {
       static struct termios check_mode;
-      apply_settings (true, device_name, argv, argc, &check_mode, &require_set_attr);
+      apply_settings (true, device_name, argv, argc,
+                      &check_mode, &require_set_attr);
     }
 
   if (file_name)
     {
+      int fdflags;
       if (fd_reopen (STDIN_FILENO, device_name, O_RDONLY | O_NONBLOCK, 0) < 0)
         error (EXIT_FAILURE, errno, "%s", quotef (device_name));
-
-      int fdflags = fcntl (STDIN_FILENO, F_GETFL);
-      if (fdflags == -1
-          || fcntl (STDIN_FILENO, F_SETFL, fdflags & ~O_NONBLOCK) < 0)
+      fdflags = fcntl (STDIN_FILENO, F_GETFL);
+      if (fdflags == -1)
+        error (EXIT_FAILURE, errno, _("%s: couldn't reset non-blocking mode"),
+               quotef (device_name));
+      if (fcntl (STDIN_FILENO, F_SETFL, fdflags & ~O_NONBLOCK) < 0)
         error (EXIT_FAILURE, errno, _("%s: couldn't reset non-blocking mode"),
                quotef (device_name));
     }
@@ -1456,7 +1433,8 @@ main (int argc, char **argv)
     }
 
   require_set_attr = false;
-  apply_settings (false, device_name, argv, argc, &mode, &require_set_attr);
+  apply_settings (false, device_name, argv, argc,
+                  &mode, &require_set_attr);
 
   if (require_set_attr)
     {
@@ -1475,10 +1453,12 @@ main (int argc, char **argv)
               error (0, 0, _("indx: mode: actual mode"));
               for (unsigned int i = 0; i < sizeof (new_mode); i++)
                 {
-                  unsigned int newc = *(((unsigned char *) &new_mode) + i);
-                  unsigned int oldc = *(((unsigned char *) &mode) + i);
+                  unsigned char *new_bytes = (unsigned char *) &new_mode;
+                  unsigned char *old_bytes = (unsigned char *) &mode;
+                  unsigned int newc = new_bytes[i];
+                  unsigned int oldc = old_bytes[i];
                   error (0, 0, "0x%02x, 0x%02x: 0x%02x%s", i, oldc, newc,
-                         newc == oldc ? "" : " *");
+                          newc == oldc ? "" : " *");
                 }
             }
 
@@ -1494,165 +1474,63 @@ main (int argc, char **argv)
 /* Return true if modes are equivalent.  */
 
 static bool
-eq_mode(const struct termios *m1, const struct termios *m2)
+eq_mode (struct termios *mode1, struct termios *mode2)
 {
-  if (m1 == m2)
-    return true;
-  if (m1 == NULL || m2 == NULL)
+  if (mode1 == NULL || mode2 == NULL) {
     return false;
-
-  if (m1->c_iflag != m2->c_iflag)
+  }
+  
+  if (mode1->c_iflag != mode2->c_iflag) {
     return false;
-  if (m1->c_oflag != m2->c_oflag)
+  }
+  
+  if (mode1->c_oflag != mode2->c_oflag) {
     return false;
-  if (m1->c_cflag != m2->c_cflag)
+  }
+  
+  if (mode1->c_cflag != mode2->c_cflag) {
     return false;
-  if (m1->c_lflag != m2->c_lflag)
+  }
+  
+  if (mode1->c_lflag != mode2->c_lflag) {
     return false;
+  }
+  
 #ifdef HAVE_C_LINE
-  if (m1->c_line != m2->c_line)
+  if (mode1->c_line != mode2->c_line) {
     return false;
+  }
 #endif
-  if (memcmp(m1->c_cc, m2->c_cc, sizeof m1->c_cc) != 0)
+  
+  if (memcmp (mode1->c_cc, mode2->c_cc, sizeof (mode1->c_cc)) != 0) {
     return false;
-  if (cfgetispeed(m1) != cfgetispeed(m2))
+  }
+  
+  if (cfgetispeed (mode1) != cfgetispeed (mode2)) {
     return false;
-  if (cfgetospeed(m1) != cfgetospeed(m2))
+  }
+  
+  if (cfgetospeed (mode1) != cfgetospeed (mode2)) {
     return false;
-
+  }
+  
   return true;
 }
 
 /* Return false if not applied because not reversible; otherwise
    return true.  */
 
-static inline bool name_is(char const *name, char const *target)
-{
-  return name && STREQ(name, target);
-}
-
-static void set_parity_mode(struct termios *mode, bool reversed, bool odd)
-{
-  if (reversed)
-    mode->c_cflag = (mode->c_cflag & ~PARENB & ~CSIZE) | CS8;
-  else if (odd)
-    mode->c_cflag = (mode->c_cflag & ~CSIZE) | CS7 | PARODD | PARENB;
-  else
-    mode->c_cflag = (mode->c_cflag & ~PARODD & ~CSIZE) | PARENB | CS7;
-}
-
-static void set_nl_mode(struct termios *mode, bool reversed)
-{
-  if (reversed)
-    {
-      mode->c_iflag = (mode->c_iflag | ICRNL) & ~INLCR & ~IGNCR;
-      mode->c_oflag = (mode->c_oflag
-#ifdef ONLCR
-                       | ONLCR
-#endif
-        )
-#ifdef OCRNL
-        & ~OCRNL
-#endif
-#ifdef ONLRET
-        & ~ONLRET
-#endif
-        ;
-    }
-  else
-    {
-      mode->c_iflag = mode->c_iflag & ~ICRNL;
-#ifdef ONLCR
-      mode->c_oflag = mode->c_oflag & ~ONLCR;
-#endif
-    }
-}
-
-static void set_cbreak_mode(struct termios *mode, bool reversed)
-{
-  if (reversed)
-    mode->c_lflag |= ICANON;
-  else
-    mode->c_lflag &= ~ICANON;
-}
-
-static void set_pass8_mode(struct termios *mode, bool reversed)
-{
-  if (reversed)
-    {
-      mode->c_cflag = (mode->c_cflag & ~CSIZE) | CS7 | PARENB;
-      mode->c_iflag |= ISTRIP;
-    }
-  else
-    {
-      mode->c_cflag = (mode->c_cflag & ~PARENB & ~CSIZE) | CS8;
-      mode->c_iflag &= ~ISTRIP;
-    }
-}
-
-static void set_litout_mode(struct termios *mode, bool reversed)
-{
-  if (reversed)
-    {
-      mode->c_cflag = (mode->c_cflag & ~CSIZE) | CS7 | PARENB;
-      mode->c_iflag |= ISTRIP;
-      mode->c_oflag |= OPOST;
-    }
-  else
-    {
-      mode->c_cflag = (mode->c_cflag & ~PARENB & ~CSIZE) | CS8;
-      mode->c_iflag &= ~ISTRIP;
-      mode->c_oflag &= ~OPOST;
-    }
-}
-
-static void apply_cooked_mode(struct termios *mode)
-{
-  mode->c_iflag |= BRKINT | IGNPAR | ISTRIP | ICRNL | IXON;
-  mode->c_oflag |= OPOST;
-  mode->c_lflag |= ISIG | ICANON;
-#if VMIN == VEOF
-  mode->c_cc[VEOF] = CEOF;
-#endif
-#if VTIME == VEOL
-  mode->c_cc[VEOL] = CEOL;
-#endif
-}
-
-static void apply_raw_mode(struct termios *mode)
-{
-  mode->c_iflag = 0;
-  mode->c_oflag &= ~OPOST;
-  mode->c_lflag &= ~(ISIG | ICANON
-#ifdef XCASE
-                     | XCASE
-#endif
-    );
-  mode->c_cc[VMIN] = 1;
-  mode->c_cc[VTIME] = 0;
-}
-
-static void set_raw_or_cooked(struct termios *mode, char const *name, bool reversed)
-{
-  bool cooked = ((name && name[0] == 'r') && reversed) || ((name && name[0] == 'c') && !reversed);
-  if (cooked)
-    apply_cooked_mode(mode);
-  else
-    apply_raw_mode(mode);
-}
-
 static bool
 set_mode (struct mode_info const *info, bool reversed, struct termios *mode)
 {
-  if (!info || !mode)
-    return false;
+  tcflag_t *bitsp;
 
   if (reversed && (info->flags & REV) == 0)
     return false;
 
-  tcflag_t *bitsp = mode_type_flag (info->type, mode);
+  bitsp = mode_type_flag (info->type, mode);
 
-  if (bitsp != NULL)
+  if (bitsp != nullptr)
     {
       if (reversed)
         *bitsp = *bitsp & ~info->mask & ~info->bits;
@@ -1661,75 +1539,169 @@ set_mode (struct mode_info const *info, bool reversed, struct termios *mode)
       return true;
     }
 
-  char const *name = info->name;
+  if (STREQ (info->name, "evenp") || STREQ (info->name, "parity"))
+    {
+      if (reversed)
+        mode->c_cflag = (mode->c_cflag & ~PARENB & ~CSIZE) | CS8;
+      else
+        mode->c_cflag = (mode->c_cflag & ~PARODD & ~CSIZE) | PARENB | CS7;
+      return true;
+    }
 
-  if (name_is (name, "evenp") || name_is (name, "parity"))
+  if (STREQ (info->name, "oddp"))
     {
-      set_parity_mode (mode, reversed, false);
+      if (reversed)
+        mode->c_cflag = (mode->c_cflag & ~PARENB & ~CSIZE) | CS8;
+      else
+        mode->c_cflag = (mode->c_cflag & ~CSIZE) | CS7 | PARODD | PARENB;
+      return true;
     }
-  else if (name_is (name, "oddp"))
+
+  if (STREQ (info->name, "nl"))
     {
-      set_parity_mode (mode, reversed, true);
+      if (reversed)
+        {
+          mode->c_iflag = (mode->c_iflag | ICRNL) & ~INLCR & ~IGNCR;
+          mode->c_oflag = mode->c_oflag
+#ifdef ONLCR
+                          | ONLCR
+#endif
+#ifdef OCRNL
+                          & ~OCRNL
+#endif
+#ifdef ONLRET
+                          & ~ONLRET
+#endif
+                          ;
+        }
+      else
+        {
+          mode->c_iflag = mode->c_iflag & ~ICRNL;
+#ifdef ONLCR
+          mode->c_oflag = mode->c_oflag & ~ONLCR;
+#endif
+        }
+      return true;
     }
-  else if (name_is (name, "nl"))
-    {
-      set_nl_mode (mode, reversed);
-    }
-  else if (name_is (name, "ek"))
+
+  if (STREQ (info->name, "ek"))
     {
       mode->c_cc[VERASE] = CERASE;
       mode->c_cc[VKILL] = CKILL;
+      return true;
     }
-  else if (name_is (name, "sane"))
+
+  if (STREQ (info->name, "sane"))
     {
       sane_mode (mode);
+      return true;
     }
-  else if (name_is (name, "cbreak"))
+
+  if (STREQ (info->name, "cbreak"))
     {
-      set_cbreak_mode (mode, reversed);
+      if (reversed)
+        mode->c_lflag |= ICANON;
+      else
+        mode->c_lflag &= ~ICANON;
+      return true;
     }
-  else if (name_is (name, "pass8"))
+
+  if (STREQ (info->name, "pass8"))
     {
-      set_pass8_mode (mode, reversed);
+      if (reversed)
+        {
+          mode->c_cflag = (mode->c_cflag & ~CSIZE) | CS7 | PARENB;
+          mode->c_iflag |= ISTRIP;
+        }
+      else
+        {
+          mode->c_cflag = (mode->c_cflag & ~PARENB & ~CSIZE) | CS8;
+          mode->c_iflag &= ~ISTRIP;
+        }
+      return true;
     }
-  else if (name_is (name, "litout"))
+
+  if (STREQ (info->name, "litout"))
     {
-      set_litout_mode (mode, reversed);
+      if (reversed)
+        {
+          mode->c_cflag = (mode->c_cflag & ~CSIZE) | CS7 | PARENB;
+          mode->c_iflag |= ISTRIP;
+          mode->c_oflag |= OPOST;
+        }
+      else
+        {
+          mode->c_cflag = (mode->c_cflag & ~PARENB & ~CSIZE) | CS8;
+          mode->c_iflag &= ~ISTRIP;
+          mode->c_oflag &= ~OPOST;
+        }
+      return true;
     }
-  else if (name_is (name, "raw") || name_is (name, "cooked"))
+
+  if (STREQ (info->name, "raw") || STREQ (info->name, "cooked"))
     {
-      set_raw_or_cooked (mode, name, reversed);
+      bool is_cooked = (info->name[0] == 'r' && reversed) || 
+                       (info->name[0] == 'c' && !reversed);
+      if (is_cooked)
+        {
+          mode->c_iflag |= BRKINT | IGNPAR | ISTRIP | ICRNL | IXON;
+          mode->c_oflag |= OPOST;
+          mode->c_lflag |= ISIG | ICANON;
+#if VMIN == VEOF
+          mode->c_cc[VEOF] = CEOF;
+#endif
+#if VTIME == VEOL
+          mode->c_cc[VEOL] = CEOL;
+#endif
+        }
+      else
+        {
+          mode->c_iflag = 0;
+          mode->c_oflag &= ~OPOST;
+          mode->c_lflag &= ~(ISIG | ICANON
+#ifdef XCASE
+                             | XCASE
+#endif
+            );
+          mode->c_cc[VMIN] = 1;
+          mode->c_cc[VTIME] = 0;
+        }
+      return true;
     }
+
 #ifdef IXANY
-  else if (name_is (name, "decctlq"))
+  if (STREQ (info->name, "decctlq"))
     {
       if (reversed)
         mode->c_iflag |= IXANY;
       else
         mode->c_iflag &= ~IXANY;
+      return true;
     }
 #endif
+
 #ifdef TABDLY
-  else if (name_is (name, "tabs"))
+  if (STREQ (info->name, "tabs"))
     {
       if (reversed)
         mode->c_oflag = (mode->c_oflag & ~TABDLY) | TAB3;
       else
         mode->c_oflag = (mode->c_oflag & ~TABDLY) | TAB0;
+      return true;
     }
-#else
-# ifdef OXTABS
-  else if (name_is (name, "tabs"))
+#elif defined(OXTABS)
+  if (STREQ (info->name, "tabs"))
     {
       if (reversed)
         mode->c_oflag = mode->c_oflag | OXTABS;
       else
         mode->c_oflag = mode->c_oflag & ~OXTABS;
+      return true;
     }
-# endif
 #endif
+
 #if defined XCASE && defined IUCLC && defined OLCUC
-  else if (name_is (name, "lcase") || name_is (name, "LCASE"))
+  if (STREQ (info->name, "lcase") || STREQ (info->name, "LCASE"))
     {
       if (reversed)
         {
@@ -1743,9 +1715,11 @@ set_mode (struct mode_info const *info, bool reversed, struct termios *mode)
           mode->c_iflag |= IUCLC;
           mode->c_oflag |= OLCUC;
         }
+      return true;
     }
 #endif
-  else if (name_is (name, "crt"))
+
+  if (STREQ (info->name, "crt"))
     {
       mode->c_lflag |= ECHOE
 #ifdef ECHOCTL
@@ -1755,8 +1729,10 @@ set_mode (struct mode_info const *info, bool reversed, struct termios *mode)
         | ECHOKE
 #endif
         ;
+      return true;
     }
-  else if (name_is (name, "dec"))
+
+  if (STREQ (info->name, "dec"))
     {
       mode->c_cc[VINTR] = 3;
       mode->c_cc[VERASE] = 127;
@@ -1772,6 +1748,7 @@ set_mode (struct mode_info const *info, bool reversed, struct termios *mode)
 #ifdef IXANY
       mode->c_iflag &= ~IXANY;
 #endif
+      return true;
     }
 
   return true;
@@ -1781,75 +1758,54 @@ static void
 set_control_char (struct control_info const *info, char const *arg,
                   struct termios *mode)
 {
-  if (!info || !info->name || !arg || !mode)
-    return;
+  unsigned long int value;
 
-  size_t idx = (size_t) info->offset;
-  if (idx >= NCCS)
+  if (info == NULL || arg == NULL || mode == NULL)
     return;
-
-  unsigned long int value = 0;
 
   if (STREQ (info->name, "min") || STREQ (info->name, "time"))
     {
       value = integer_arg (arg, TYPE_MAXIMUM (cc_t));
     }
+  else if (arg[0] == '\0' || arg[1] == '\0')
+    {
+      value = to_uchar (arg[0]);
+    }
+  else if (STREQ (arg, "^-") || STREQ (arg, "undef"))
+    {
+      value = _POSIX_VDISABLE;
+    }
+  else if (arg[0] == '^' && arg[1] != '\0')
+    {
+      value = (arg[1] == '?') ? 127 : (to_uchar (arg[1]) & ~0140);
+    }
   else
     {
-      char c0 = arg[0];
-
-      if (c0 == '\0')
-        {
-          value = to_uchar (c0);
-        }
-      else if (arg[1] == '\0')
-        {
-          value = to_uchar (c0);
-        }
-      else if (STREQ (arg, "^-") || STREQ (arg, "undef"))
-        {
-          value = _POSIX_VDISABLE;
-        }
-      else if (c0 == '^')
-        {
-          char c1 = arg[1];
-          value = (c1 == '?') ? 127 : (to_uchar (c1) & ~0140);
-        }
-      else
-        {
-          value = integer_arg (arg, TYPE_MAXIMUM (cc_t));
-        }
+      value = integer_arg (arg, TYPE_MAXIMUM (cc_t));
     }
 
-  mode->c_cc[idx] = (cc_t) value;
+  if (info->offset < NCCS)
+    mode->c_cc[info->offset] = value;
 }
 
 static void
-set_speed(enum speed_setting type, char const *arg, struct termios *mode)
+set_speed (enum speed_setting type, char const *arg, struct termios *mode)
 {
-  affirm(arg != NULL);
-  affirm(mode != NULL);
+  speed_t baud = string_to_baud (arg);
+  affirm (baud != (speed_t) -1);
 
-  speed_t baud = string_to_baud(arg);
-  affirm(baud != (speed_t)-1);
-
-  int set_input = (type == input_speed) || (type == both_speeds);
-  int set_output = (type == output_speed) || (type == both_speeds);
-
-  const char *qarg = quoteaf(arg);
-
-  if (set_input)
+  if (type == input_speed || type == both_speeds)
     {
-      if (cfsetispeed(mode, baud))
-        error(EXIT_FAILURE, 0, _("unsupported ispeed %s"), qarg);
       last_ibaud = baud;
+      if (cfsetispeed (mode, baud) != 0)
+        error (EXIT_FAILURE, 0, _("unsupported ispeed %s"), quoteaf (arg));
     }
-
-  if (set_output)
+  
+  if (type == output_speed || type == both_speeds)
     {
-      if (cfsetospeed(mode, baud))
-        error(EXIT_FAILURE, 0, _("unsupported ospeed %s"), qarg);
       last_obaud = baud;
+      if (cfsetospeed (mode, baud) != 0)
+        error (EXIT_FAILURE, 0, _("unsupported ospeed %s"), quoteaf (arg));
     }
 }
 
@@ -1948,31 +1904,32 @@ display_window_size (bool fancy, char const *device_name)
 }
 #endif
 
-static int
-screen_columns (void)
+static int screen_columns(void)
 {
+    int columns = 80;
+    
 #ifdef TIOCGWINSZ
-  struct winsize win;
-
-  if (get_win_size (STDOUT_FILENO, &win) == 0 && win.ws_col > 0)
-    return win.ws_col;
+    struct winsize win;
+    if (get_win_size(STDOUT_FILENO, &win) == 0 && win.ws_col > 0) {
+        return win.ws_col;
+    }
 #endif
-  {
-    const int default_columns = 80;
-    const char *col_string = getenv ("COLUMNS");
-    long int n_columns = default_columns;
-
-    if (col_string != NULL)
-      {
-        long int tmp;
-        if (xstrtol (col_string, NULL, 0, &tmp, "") == LONGINT_OK
-            && tmp > 0
-            && tmp <= INT_MAX)
-          n_columns = tmp;
-      }
-
-    return (int) n_columns;
-  }
+    
+    char *col_string = getenv("COLUMNS");
+    if (col_string == NULL) {
+        return columns;
+    }
+    
+    long int n_columns;
+    if (xstrtol(col_string, NULL, 0, &n_columns, "") != LONGINT_OK) {
+        return columns;
+    }
+    
+    if (n_columns > 0 && n_columns <= INT_MAX) {
+        columns = (int)n_columns;
+    }
+    
+    return columns;
 }
 
 ATTRIBUTE_PURE
@@ -2002,26 +1959,24 @@ mode_type_flag (enum mode_type type, struct termios *mode)
 }
 
 static void
-display_settings(enum output_type out_type, struct termios *mode, const char const *device_name)
+display_settings (enum output_type output_type, struct termios *mode,
+                  char const *device_name)
 {
-  switch (out_type)
+  if (mode == NULL)
+    return;
+
+  switch (output_type)
     {
     case changed:
-      if (!mode)
-        return;
-      display_changed(mode);
+      display_changed (mode);
       break;
 
     case all:
-      if (!mode || !device_name)
-        return;
-      display_all(mode, device_name);
+      display_all (mode, device_name);
       break;
 
     case recoverable:
-      if (!mode)
-        return;
-      display_recoverable(mode);
+      display_recoverable (mode);
       break;
 
     default:
@@ -2030,194 +1985,201 @@ display_settings(enum output_type out_type, struct termios *mode, const char con
 }
 
 static void
-display_changed(struct termios *mode)
+display_changed (struct termios *mode)
 {
-  if (mode == NULL)
-    return;
-
-  display_speed(mode, true);
+  display_speed (mode, true);
 #ifdef HAVE_C_LINE
-  wrapf("line = %d;", mode->c_line);
+  wrapf ("line = %d;", mode->c_line);
 #endif
-  putchar('\n');
+  putchar ('\n');
   current_col = 0;
 
+  display_control_settings(mode);
+  display_mode_settings(mode);
+}
+
+static void
+display_control_settings(struct termios *mode)
+{
   bool empty_line = true;
-
-  for (size_t i = 0;; ++i)
+  
+  for (int i = 0; !STREQ (control_info[i].name, "min"); ++i)
     {
-      const char *name = control_info[i].name;
-      if (name == NULL || STREQ(name, "min"))
-        break;
-
-      unsigned int offset = control_info[i].offset;
-      if (mode->c_cc[offset] == control_info[i].saneval)
+      if (should_skip_control_setting(mode, i))
         continue;
-
-#ifdef VFLUSHO
-      if (STREQ(name, "flush"))
-        continue;
-#endif
-
-#if VSWTCH == VSUSP
-      if (STREQ(name, "swtch"))
-        continue;
-#endif
-
-#if VEOF == VMIN
-      if ((mode->c_lflag & ICANON) == 0
-          && (STREQ(name, "eof") || STREQ(name, "eol")))
-        continue;
-#endif
 
       empty_line = false;
-      wrapf("%s = %s;", name, visible(mode->c_cc[offset]));
+      wrapf ("%s = %s;", control_info[i].name,
+             visible (mode->c_cc[control_info[i].offset]));
     }
-
+  
   if ((mode->c_lflag & ICANON) == 0)
     {
-      wrapf("min = %lu; time = %lu;\n",
-            (unsigned long) mode->c_cc[VMIN],
-            (unsigned long) mode->c_cc[VTIME]);
+      wrapf ("min = %lu; time = %lu;\n",
+             (unsigned long int) mode->c_cc[VMIN],
+             (unsigned long int) mode->c_cc[VTIME]);
     }
   else if (!empty_line)
     {
-      putchar('\n');
+      putchar ('\n');
     }
   current_col = 0;
+}
 
-  empty_line = true;
+static bool
+should_skip_control_setting(struct termios *mode, int index)
+{
+  if (mode->c_cc[control_info[index].offset] == control_info[index].saneval)
+    return true;
+
+#ifdef VFLUSHO
+  if (STREQ (control_info[index].name, "flush"))
+    return true;
+#endif
+
+#if VSWTCH == VSUSP
+  if (STREQ (control_info[index].name, "swtch"))
+    return true;
+#endif
+
+#if VEOF == VMIN
+  if ((mode->c_lflag & ICANON) == 0
+      && (STREQ (control_info[index].name, "eof")
+          || STREQ (control_info[index].name, "eol")))
+    return true;
+#endif
+
+  return false;
+}
+
+static void
+display_mode_settings(struct termios *mode)
+{
+  bool empty_line = true;
   enum mode_type prev_type = control;
 
-  for (size_t i = 0; mode_info[i].name != NULL; ++i)
+  for (int i = 0; mode_info[i].name != nullptr; ++i)
     {
-      const char *name = mode_info[i].name;
-
-      if ((mode_info[i].flags & OMIT) != 0)
+      if (mode_info[i].flags & OMIT)
         continue;
-
+        
       if (mode_info[i].type != prev_type)
         {
-          if (!empty_line)
-            {
-              putchar('\n');
-              current_col = 0;
-              empty_line = true;
-            }
-          prev_type = mode_info[i].type;
+          handle_type_change(&empty_line, &prev_type, mode_info[i].type);
         }
 
-      tcflag_t *bitsp = mode_type_flag(mode_info[i].type, mode);
-      if (bitsp == NULL)
-        continue;
-
-      unsigned long mask = (mode_info[i].mask != 0UL)
-                           ? mode_info[i].mask
-                           : mode_info[i].bits;
-
-      if ((*bitsp & mask) == mode_info[i].bits)
-        {
-          if ((mode_info[i].flags & SANE_UNSET) != 0)
-            {
-              wrapf("%s", name);
-              empty_line = false;
-            }
-        }
-      else
-        {
-          if ((mode_info[i].flags & (SANE_SET | REV)) == (SANE_SET | REV))
-            {
-              wrapf("-%s", name);
-              empty_line = false;
-            }
-        }
+      display_single_mode_setting(mode, i, &empty_line);
     }
-
+    
   if (!empty_line)
-    putchar('\n');
+    {
+      putchar ('\n');
+    }
   current_col = 0;
 }
 
 static void
-display_all(struct termios *mode, char const *device_name)
+handle_type_change(bool *empty_line, enum mode_type *prev_type, enum mode_type new_type)
 {
-  if (mode == NULL)
-    return;
+  if (!*empty_line)
+    {
+      putchar ('\n');
+      current_col = 0;
+      *empty_line = true;
+    }
+  *prev_type = new_type;
+}
 
+static void
+display_single_mode_setting(struct termios *mode, int index, bool *empty_line)
+{
+  tcflag_t *bitsp = mode_type_flag (mode_info[index].type, mode);
+  if (bitsp == nullptr)
+    return;
+    
+  unsigned long mask = mode_info[index].mask ? mode_info[index].mask : mode_info[index].bits;
+  
+  if ((*bitsp & mask) == mode_info[index].bits)
+    {
+      if (mode_info[index].flags & SANE_UNSET)
+        {
+          wrapf ("%s", mode_info[index].name);
+          *empty_line = false;
+        }
+    }
+  else if ((mode_info[index].flags & (SANE_SET | REV)) == (SANE_SET | REV))
+    {
+      wrapf ("-%s", mode_info[index].name);
+      *empty_line = false;
+    }
+}
+
+static void
+display_all (struct termios *mode, char const *device_name)
+{
   int i;
   tcflag_t *bitsp;
-  tcflag_t mask;
+  unsigned long mask;
   enum mode_type prev_type = control;
-  int is_canon = (mode->c_lflag & ICANON) != 0;
 
-  display_speed(mode, true);
+  display_speed (mode, true);
 #ifdef TIOCGWINSZ
-  display_window_size(true, device_name);
+  display_window_size (true, device_name);
 #endif
 #ifdef HAVE_C_LINE
-  wrapf("line = %d;", mode->c_line);
+  wrapf ("line = %d;", mode->c_line);
 #endif
-  putchar('\n');
+  putchar ('\n');
   current_col = 0;
 
-  for (i = 0; control_info[i].name && !STREQ(control_info[i].name, "min"); ++i)
+  for (i = 0; ! STREQ (control_info[i].name, "min"); ++i)
     {
-      char const *name = control_info[i].name;
-
 #ifdef VFLUSHO
-      if (STREQ(name, "flush"))
+      if (STREQ (control_info[i].name, "flush"))
         continue;
 #endif
-
 #if VSWTCH == VSUSP
-      if (STREQ(name, "swtch"))
+      if (STREQ (control_info[i].name, "swtch"))
         continue;
 #endif
-
 #if VEOF == VMIN
-      if (!is_canon && (STREQ(name, "eof") || STREQ(name, "eol")))
+      if ((mode->c_lflag & ICANON) == 0
+          && (STREQ (control_info[i].name, "eof")
+              || STREQ (control_info[i].name, "eol")))
         continue;
 #endif
-
-      wrapf("%s = %s;", name, visible(mode->c_cc[control_info[i].offset]));
+      wrapf ("%s = %s;", control_info[i].name,
+             visible (mode->c_cc[control_info[i].offset]));
     }
-
 #if VEOF == VMIN
-  if (!is_canon)
+  if ((mode->c_lflag & ICANON) == 0)
 #endif
-    wrapf("min = %lu; time = %lu;",
-          (unsigned long int) mode->c_cc[VMIN],
-          (unsigned long int) mode->c_cc[VTIME]);
-
+    wrapf ("min = %lu; time = %lu;",
+           (unsigned long int) mode->c_cc[VMIN],
+           (unsigned long int) mode->c_cc[VTIME]);
   if (current_col != 0)
-    putchar('\n');
+    putchar ('\n');
   current_col = 0;
 
   for (i = 0; mode_info[i].name != NULL; ++i)
     {
       if (mode_info[i].flags & OMIT)
         continue;
-
       if (mode_info[i].type != prev_type)
         {
-          putchar('\n');
+          putchar ('\n');
           current_col = 0;
           prev_type = mode_info[i].type;
         }
 
-      bitsp = mode_type_flag(mode_info[i].type, mode);
-      if (bitsp == NULL)
-        continue;
-
-      mask = (mode_info[i].mask != 0) ? mode_info[i].mask : mode_info[i].bits;
-
+      bitsp = mode_type_flag (mode_info[i].type, mode);
+      mask = mode_info[i].mask ? mode_info[i].mask : mode_info[i].bits;
       if ((*bitsp & mask) == mode_info[i].bits)
-        wrapf("%s", mode_info[i].name);
+        wrapf ("%s", mode_info[i].name);
       else if (mode_info[i].flags & REV)
-        wrapf("-%s", mode_info[i].name);
+        wrapf ("-%s", mode_info[i].name);
     }
-
-  putchar('\n');
+  putchar ('\n');
   current_col = 0;
 }
 
@@ -2225,128 +2187,131 @@ display_all(struct termios *mode, char const *device_name)
    Note we don't flag the case where only ispeed or
    ospeed is set, when that would set both.  */
 
-static void check_speed(struct termios *mode)
+static void
+check_speed (struct termios *mode)
 {
-    if (mode == NULL) {
-        error(EXIT_FAILURE, 0, _("invalid termios pointer"));
-        return;
+  if (last_ibaud == -1 || last_obaud == -1)
+    {
+      return;
     }
 
-    if (last_ibaud == -1 || last_obaud == -1) {
-        return;
-    }
+  speed_t current_ispeed = cfgetispeed (mode);
+  speed_t current_ospeed = cfgetospeed (mode);
 
-    const speed_t ispeed = cfgetispeed(mode);
-    const speed_t ospeed = cfgetospeed(mode);
-
-    if (ispeed != (speed_t) last_ibaud || ospeed != (speed_t) last_obaud) {
-        error(EXIT_FAILURE, 0,
-              _("asymmetric input (%lu), output (%lu) speeds not supported"),
-              baud_to_value(last_ibaud), baud_to_value(last_obaud));
+  if (current_ispeed != last_ibaud || current_ospeed != last_obaud)
+    {
+      error (EXIT_FAILURE, 0,
+             _("asymmetric input (%lu), output (%lu) speeds not supported"),
+             baud_to_value (last_ibaud), baud_to_value (last_obaud));
     }
 }
 
 static void
 display_speed(struct termios *mode, bool fancy)
 {
-  if (mode == NULL)
-    return;
+    if (mode == NULL) {
+        return;
+    }
 
-  const speed_t ispeed = cfgetispeed(mode);
-  const speed_t ospeed = cfgetospeed(mode);
-  const bool single_speed = (ispeed == 0 || ispeed == ospeed);
-
-  if (single_speed)
-  {
-    const unsigned long o_val = baud_to_value(ospeed);
-    wrapf(fancy ? "speed %lu baud;" : "%lu\n", o_val);
-  }
-  else
-  {
-    const unsigned long i_val = baud_to_value(ispeed);
-    const unsigned long o_val = baud_to_value(ospeed);
-    wrapf(fancy ? "ispeed %lu baud; ospeed %lu baud;" : "%lu %lu\n",
-          i_val, o_val);
-  }
-
-  if (!fancy)
-    current_col = 0;
+    speed_t ispeed = cfgetispeed(mode);
+    speed_t ospeed = cfgetospeed(mode);
+    
+    unsigned long ispeed_value = baud_to_value(ispeed);
+    unsigned long ospeed_value = baud_to_value(ospeed);
+    
+    if (ispeed == 0 || ispeed == ospeed) {
+        const char *format = fancy ? "speed %lu baud;" : "%lu\n";
+        wrapf(format, ospeed_value);
+    } else {
+        const char *format = fancy ? "ispeed %lu baud; ospeed %lu baud;" : "%lu %lu\n";
+        wrapf(format, ispeed_value, ospeed_value);
+    }
+    
+    if (!fancy) {
+        current_col = 0;
+    }
 }
 
 static void
-display_recoverable(struct termios *mode)
+display_recoverable (struct termios *mode)
 {
   if (mode == NULL)
     return;
 
-  unsigned long ciflag = (unsigned long) mode->c_iflag;
-  unsigned long coflag = (unsigned long) mode->c_oflag;
-  unsigned long ccflag = (unsigned long) mode->c_cflag;
-  unsigned long clflag = (unsigned long) mode->c_lflag;
-
-  if (printf("%lx:%lx:%lx:%lx", ciflag, coflag, ccflag, clflag) < 0)
-    return;
-
+  printf ("%lx:%lx:%lx:%lx",
+          (unsigned long int) mode->c_iflag,
+          (unsigned long int) mode->c_oflag,
+          (unsigned long int) mode->c_cflag,
+          (unsigned long int) mode->c_lflag);
   for (size_t i = 0; i < NCCS; ++i)
-    {
-      if (printf(":%lx", (unsigned long) mode->c_cc[i]) < 0)
-        return;
-    }
-
-  if (putchar('\n') == EOF)
-    return;
+    printf (":%lx", (unsigned long int) mode->c_cc[i]);
+  putchar ('\n');
 }
 
 /* NOTE: identical to below, modulo use of tcflag_t */
 static int
-strtoul_tcflag_t(const char *s, int base, char **p, tcflag_t *result, char delim)
+strtoul_tcflag_t (char const *s, int base, char **p, tcflag_t *result,
+                  char delim)
 {
-  unsigned long value;
-  char *endptr;
-
   if (!s || !p || !result)
     return -1;
-
+  
+  char *endptr;
   errno = 0;
-  value = strtoul(s, &endptr, base);
-  *p = endptr;
-
+  unsigned long ul = strtoul (s, &endptr, base);
+  
   if (errno != 0)
     return -1;
+  
   if (endptr == s)
     return -1;
+  
   if (*endptr != delim)
     return -1;
-  if ((tcflag_t) value != value)
+  
+  if ((tcflag_t) ul != ul)
     return -1;
-
-  *result = (tcflag_t) value;
+  
+  *p = endptr;
+  *result = (tcflag_t) ul;
   return 0;
 }
 
 /* NOTE: identical to above, modulo use of cc_t */
 static int
-strtoul_cc_t(const char *s, int base, char **p, cc_t *result, char delim)
+strtoul_cc_t (char const *s, int base, char **p, cc_t *result, char delim)
 {
-  if (s == NULL || p == NULL || result == NULL)
+  if (s == NULL || p == NULL || result == NULL) {
     return -1;
-
+  }
+  
+  char *endptr;
   errno = 0;
-  char *endptr = NULL;
-  unsigned long ul = strtoul(s, &endptr, base);
-
-  *p = endptr;
-
-  if (errno != 0)
+  unsigned long ul = strtoul (s, &endptr, base);
+  
+  if (errno != 0) {
     return -1;
-  if (endptr == s)
+  }
+  
+  if (endptr == s) {
     return -1;
-  if (*endptr != delim)
+  }
+  
+  if (*endptr != delim) {
+    if (p != NULL) {
+      *p = endptr;
+    }
     return -1;
-  if ((cc_t) ul != ul)
+  }
+  
+  if ((cc_t) ul != ul) {
     return -1;
-
+  }
+  
   *result = (cc_t) ul;
+  if (p != NULL) {
+    *p = endptr;
+  }
   return 0;
 }
 
@@ -2355,33 +2320,29 @@ strtoul_cc_t(const char *s, int base, char **p, cc_t *result, char delim)
 static bool
 recover_mode (char const *arg, struct termios *mode)
 {
-  if (!arg || !mode)
-    return false;
-
-  enum { FLAG_COUNT = 4 };
-  tcflag_t flag[FLAG_COUNT];
+  tcflag_t flag[4];
   char const *s = arg;
-  char *p = NULL;
-  size_t i;
-
-  for (i = 0; i < FLAG_COUNT; i++)
+  
+  for (size_t i = 0; i < 4; i++)
     {
-      if (strtoul_tcflag_t (s, 16, &p, &flag[i], ':') != 0 || p == NULL)
+      char *p;
+      if (strtoul_tcflag_t (s, 16, &p, &flag[i], ':') != 0)
         return false;
       s = p + 1;
     }
-
+  
   mode->c_iflag = flag[0];
   mode->c_oflag = flag[1];
   mode->c_cflag = flag[2];
   mode->c_lflag = flag[3];
 
-  for (i = 0; i < NCCS; ++i)
+  for (size_t i = 0; i < NCCS; i++)
     {
-      char delim = (i + 1 < NCCS) ? ':' : '\0';
-      if (strtoul_cc_t (s, 16, &p, &mode->c_cc[i], delim) != 0 || p == NULL)
+      char *p;
+      char delim = (i < NCCS - 1) ? ':' : '\0';
+      if (strtoul_cc_t (s, 16, &p, &mode->c_cc[i], delim) != 0)
         return false;
-      s = delim ? (p + 1) : p;
+      s = p + 1;
     }
 
   return true;
@@ -2451,41 +2412,33 @@ string_to_baud (char const *arg)
 static void
 sane_mode(struct termios *mode)
 {
-  int i;
+    if (!mode) {
+        return;
+    }
 
-  if (mode == NULL)
-    return;
-
-  for (i = 0; control_info[i].name; ++i)
-    {
+    for (int i = 0; control_info[i].name; ++i) {
 #if VMIN == VEOF
-      if (STREQ(control_info[i].name, "min"))
-        break;
+        if (STREQ(control_info[i].name, "min")) {
+            break;
+        }
 #endif
-      if ((unsigned)control_info[i].offset < NCCS)
         mode->c_cc[control_info[i].offset] = control_info[i].saneval;
     }
 
-  for (i = 0; mode_info[i].name != NULL; ++i)
-    {
-      unsigned int flags = mode_info[i].flags;
-
-      if (flags & NO_SETATTR)
-        continue;
-
-      if (flags & SANE_SET)
-        {
-          tcflag_t *bitsp = mode_type_flag(mode_info[i].type, mode);
-          if (!bitsp)
+    for (int i = 0; mode_info[i].name != nullptr; ++i) {
+        if (mode_info[i].flags & NO_SETATTR) {
             continue;
-          *bitsp = (*bitsp & ~mode_info[i].mask) | mode_info[i].bits;
         }
-      else if (flags & SANE_UNSET)
-        {
-          tcflag_t *bitsp = mode_type_flag(mode_info[i].type, mode);
-          if (!bitsp)
+
+        tcflag_t *bitsp = mode_type_flag(mode_info[i].type, mode);
+        if (!bitsp) {
             continue;
-          *bitsp = *bitsp & ~(mode_info[i].mask | mode_info[i].bits);
+        }
+
+        if (mode_info[i].flags & SANE_SET) {
+            *bitsp = (*bitsp & ~mode_info[i].mask) | mode_info[i].bits;
+        } else if (mode_info[i].flags & SANE_UNSET) {
+            *bitsp = *bitsp & ~mode_info[i].mask & ~mode_info[i].bits;
         }
     }
 }
@@ -2493,69 +2446,53 @@ sane_mode(struct termios *mode)
 /* Return a string that is the printable representation of character CH.  */
 /* Adapted from 'cat' by Torbjörn Granlund.  */
 
-static void append_char(char **out, int *rem, char c)
-{
-  if (*rem > 1)
-    {
-      **out = c;
-      (*out)++;
-      (*rem)--;
-    }
-}
-
 static char const *
 visible (cc_t ch)
 {
   static char buf[10];
-  char *out = buf;
-  int rem = (int)sizeof buf;
-  unsigned int c;
+  size_t pos = 0;
 
   if (ch == _POSIX_VDISABLE)
     return "<undef>";
 
-  c = (unsigned int) ch;
-
-  if (c < 32)
+  if (ch < 32)
     {
-      append_char(&out, &rem, '^');
-      append_char(&out, &rem, (char)(c + 64));
+      buf[pos++] = '^';
+      buf[pos++] = ch + 64;
     }
-  else if (c < 127)
+  else if (ch < 127)
     {
-      append_char(&out, &rem, (char)c);
+      buf[pos++] = ch;
     }
-  else if (c == 127)
+  else if (ch == 127)
     {
-      append_char(&out, &rem, '^');
-      append_char(&out, &rem, '?');
+      buf[pos++] = '^';
+      buf[pos++] = '?';
     }
   else
     {
-      unsigned int low = c - 128;
-      append_char(&out, &rem, 'M');
-      append_char(&out, &rem, '-');
-      if (low < 32)
+      buf[pos++] = 'M';
+      buf[pos++] = '-';
+      
+      cc_t adjusted = ch - 128;
+      
+      if (adjusted < 32)
         {
-          append_char(&out, &rem, '^');
-          append_char(&out, &rem, (char)(low + 64));
+          buf[pos++] = '^';
+          buf[pos++] = adjusted + 64;
         }
-      else if (low < 127)
+      else if (adjusted < 127)
         {
-          append_char(&out, &rem, (char)low);
+          buf[pos++] = adjusted;
         }
       else
         {
-          append_char(&out, &rem, '^');
-          append_char(&out, &rem, '?');
+          buf[pos++] = '^';
+          buf[pos++] = '?';
         }
     }
-
-  if (rem > 0)
-    *out = '\0';
-  else
-    buf[sizeof buf - 1] = '\0';
-
+    
+  buf[pos] = '\0';
   return buf;
 }
 
@@ -2564,14 +2501,13 @@ visible (cc_t ch)
    larger than MAXVAL.  */
 
 static uintmax_t
-integer_arg(char const *s, uintmax_t maxval)
+integer_arg (char const *s, uintmax_t maxval)
 {
-  const int base = 0;
-  const uintmax_t minval = 0;
-  const char *const suffixes = "bB";
-  const char *const errmsg = _("invalid integer argument");
-  const int option1 = 0;
-  const int option2 = 0;
-
-  return xnumtoumax(s, base, minval, maxval, suffixes, errmsg, option1, option2);
+  if (s == NULL)
+    {
+      error (EXIT_FAILURE, 0, _("invalid integer argument"));
+    }
+  
+  return xnumtoumax (s, 0, 0, maxval, "bB", _("invalid integer argument"),
+                     0, 0);
 }
